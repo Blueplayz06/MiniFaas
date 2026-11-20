@@ -1,4 +1,4 @@
-# Mini FaaS: a local serverless platform for studying cold starts and cost
+# Mini FaaS: A local serverless platform for studying cold starts and cost
 
 Runs on a laptop with Python 3.9+ and (optionally) Node.js. No Docker, no cloud account.
 
