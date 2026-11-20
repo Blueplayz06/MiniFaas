@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Mini FaaS Dashboard</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:24px;background:#f4f6fb;color:#1b2540}
+h1{margin:0 0 4px;color:#0b1f5c}.sub{color:#555;margin-bottom:18px}
+.card{background:#fff;border-radius:10px;padding:16px;margin-bottom:16px;box-shadow:0 1px 4px #0002}
+.row{display:flex;gap:16px;flex-wrap:wrap}.row .card{flex:1;min-width:300px}
+button{background:#2f5597;color:#fff;border:0;border-radius:6px;padding:7px 12px;margin:3px 3px 3px 0;cursor:pointer}
+button.red{background:#d9534f}button.gray{background:#6b7a99}
+.bars{display:flex;align-items:flex-end;height:70px;gap:2px;margin-top:8px;background:#f4f6fb;padding:4px;border-radius:6px}
+.bar{width:8px;background:#2f5597}.bar.cold{background:#d9534f}
+.kv{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0;font-size:14px}.kv b{color:#0b1f5c}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;border-bottom:1px solid #e3e8f3;text-align:left}
+.tag{padding:1px 7px;border-radius:9px;color:#fff;font-size:12px}.c{background:#d9534f}.w{background:#2f5597}
+input{width:60px}
+</style></head><body>
+<h1>Mini FaaS - Serverless Lifecycle Demo</h1>
+<div class="sub">Each function runs in worker processes. <span class="tag c">COLD</span> = new worker spawned (process + runtime + imports). <span class="tag w">WARM</span> = idle worker reused. Idle workers expire after the keep-alive.</div>
+<div class="row" id="fns"></div>
+<div class="card"><b>Recent invocations</b><table id="ev"></table></div>
+<script>
+const names=["hello-py","heavy-py","hello-node"];
+const f=n=>fetch(n).then(r=>r.json());
+const inv=n=>f("/invoke/"+n);
+const burst=(n,k)=>Promise.all(Array.from({length:k},()=>inv(n)));
+function card(n){return `<div class="card"><h3 style="margin:0">${n}</h3>
+<div class="kv" id="kv-${n}"></div><div class="bars" id="b-${n}"></div>
+<div style="margin-top:8px">
+<button onclick="inv('${n}')">Invoke</button>
+<button onclick="burst('${n}',10)">Burst x10</button>
+<button class="red" onclick="f('/kill/${n}')">Kill warm workers</button></div>
+<div style="margin-top:6px;font-size:13px">Keep-alive (s) <input id="ka-${n}" value="5">
+<button class="gray" onclick="f('/config/${n}?keep_alive='+document.getElementById('ka-${n}').value)">Set</button>
+Provisioned <input id="pv-${n}" value="0">
+<button class="gray" onclick="f('/config/${n}?provisioned='+document.getElementById('pv-${n}').value)">Set</button></div></div>`}
+document.getElementById("fns").innerHTML=names.map(card).join("");
+async function tick(){const s=await f("/stats");
+for(const n of names){const x=s.functions[n];
+document.getElementById("kv-"+n).innerHTML=`<span>Invocations <b>${x.invocations}</b></span><span>Cold <b>${x.cold}</b></span><span>Cold % <b>${x.invocations?(100*x.cold/x.invocations).toFixed(0):0}</b></span><span>Workers <b>${x.workers}</b> (busy ${x.busy})</span><span>Provisioned <b>${x.provisioned}</b></span><span>Cost <b>$${x.cost.toFixed(6)}</b></span>`;
+const mx=Math.max(1,...x.recent);const evs=s.events.filter(e=>e.fn==n).slice(-30);
+document.getElementById("b-"+n).innerHTML=x.recent.map(v=>`<div class="bar${v>mx*0.5&&x.recent.some(y=>y<v/2)?' cold':''}" style="height:${Math.max(3,60*v/mx)}px" title="${v} ms"></div>`).join("");}
+document.getElementById("ev").innerHTML="<tr><th>Function</th><th>Type</th><th>Latency (ms)</th><th>Cold-start overhead (ms)</th><th>Handler (ms)</th><th>Cost ($)</th></tr>"+s.events.slice().reverse().map(e=>`<tr><td>${e.fn}</td><td><span class="tag ${e.cold?'c':'w'}">${e.cold?'COLD':'WARM'}</span></td><td>${e.latency_ms}</td><td>${e.init_ms}</td><td>${e.duration_ms}</td><td>${e.cost_usd.toFixed(8)}</td></tr>`).join("");}
+setInterval(tick,700);tick();
+</script></body></html>
